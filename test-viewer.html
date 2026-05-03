@@ -1,0 +1,717 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>2026 Stanley Cup Bracket - Viewer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap');
+        
+        body {
+            font-family: 'Outfit', sans-serif;
+            background-color: #f1f5f9;
+            color: #1e293b;
+            margin: 0;
+            padding: 0;
+            overflow-x: hidden;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+
+        .viewport-container {
+            flex-grow: 1;
+            width: 100%;
+            overflow: auto;
+            padding: 20px;
+            scroll-behavior: smooth;
+            background: #f8fafc;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .bracket-canvas {
+            display: inline-flex;
+            justify-content: center;
+            align-items: center;
+            min-width: 100%;
+            padding: 80px 40px;
+            position: relative;
+            transform-origin: top center;
+            transition: transform 0.3s ease;
+        }
+
+        .leaderboard-footer {
+            height: 70px;
+            background: #ffffff;
+            border-top: 1px solid #e2e8f0;
+            display: flex;
+            align-items: center;
+            padding: 0 24px;
+            flex-shrink: 0;
+            overflow-x: auto;
+            gap: 16px;
+            box-shadow: 0 -4px 6px -1px rgba(0,0,0,0.02);
+            scrollbar-width: none;
+        }
+        .leaderboard-footer::-webkit-scrollbar { display: none; }
+
+        .footer-label {
+            background: #3b82f6;
+            color: white;
+            font-size: 9px;
+            font-weight: 900;
+            text-transform: uppercase;
+            padding: 4px 10px;
+            border-radius: 4px;
+            letter-spacing: 0.1em;
+            white-space: nowrap;
+        }
+
+        .predictor-pill {
+            display: flex;
+            align-items: center;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            padding: 6px 12px;
+            border-radius: 12px;
+            gap: 10px;
+            min-width: fit-content;
+        }
+
+        .pill-rank { font-weight: 800; color: #94a3b8; font-size: 10px; width: 16px; }
+        .pill-name { font-weight: 700; font-size: 11px; color: #1e293b; text-transform: uppercase; white-space: nowrap; }
+        .pill-pts { background: #dbeafe; color: #1e40af; font-size: 9px; font-weight: 900; padding: 1px 6px; border-radius: 4px; }
+
+        .round-column {
+            display: flex;
+            flex-direction: column;
+            justify-content: space-around;
+            width: 190px;
+            position: relative;
+        }
+
+        .matchup {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            gap: 2px;
+            position: relative;
+            z-index: 10;
+        }
+
+        .r1 .matchup { margin: 10px 0; height: 110px; }
+        .r2 .matchup { height: 220px; }
+        .r3 .matchup { height: 440px; }
+
+        .west-side .matchup::after { content: ""; position: absolute; right: -25px; width: 25px; border-right: 2px solid #cbd5e1; z-index: -1; }
+        .west-side .r1 .matchup::after { height: 50%; top: 25%; border-top: 2px solid #cbd5e1; border-bottom: 2px solid #cbd5e1; }
+        .west-side .r2 .matchup::after { height: 50%; top: 25%; border-top: 2px solid #cbd5e1; border-bottom: 2px solid #cbd5e1; }
+
+        .east-side .matchup::after { content: ""; position: absolute; left: -25px; width: 25px; border-left: 2px solid #cbd5e1; z-index: -1; }
+        .east-side .r1 .matchup::after { height: 50%; top: 25%; border-top: 2px solid #cbd5e1; border-bottom: 2px solid #cbd5e1; }
+        .east-side .r2 .matchup::after { height: 50%; top: 25%; border-top: 2px solid #cbd5e1; border-bottom: 2px solid #cbd5e1; }
+
+        .team-slot {
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            padding: 4px 8px;
+            border-radius: 6px;
+            cursor: default;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            height: 42px;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+        }
+
+        .team-slot.winner { background: #3b82f6; border-color: #2563eb; color: white; }
+        .team-slot.loser { background: #fee2e2; border-color: #fca5a5; color: #991b1b; opacity: 0.8; }
+        .team-slot.loser .seed-label { color: #f87171; }
+        .team-slot.empty { border-style: dashed; background: #fdfdfd; color: #cbd5e1; cursor: default; }
+
+        .round-title {
+            text-align: center;
+            font-weight: 800;
+            text-transform: uppercase;
+            font-size: 0.6rem;
+            letter-spacing: 0.15em;
+            color: #94a3b8;
+            position: absolute;
+            top: -45px;
+            width: 100%;
+        }
+
+        .series-label-box {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            justify-content: center;
+            margin-bottom: 4px;
+        }
+        
+        .series-text {
+            background: #4f72d4;
+            color: white;
+            font-size: 8px;
+            font-weight: 900;
+            padding: 2px 5px;
+            border-radius: 2px;
+            text-transform: uppercase;
+        }
+
+        .games-display {
+            border: 1px solid #cbd5e1;
+            border-radius: 4px;
+            padding: 0 6px;
+            font-size: 10px;
+            font-weight: 900;
+            color: #4f72d4;
+            background: #f8fafc;
+            height: 18px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 22px;
+        }
+
+        .team-logo { width: 22px; height: 22px; margin-right: 6px; }
+        .seed-label { font-size: 0.55rem; color: #94a3b8; width: 22px; font-weight: 800; }
+
+        .spreadsheet-container {
+            width: 100%;
+            overflow-x: auto;
+            background: white;
+            border-radius: 16px;
+            border: 1px solid #e2e8f0;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+        }
+
+        .sheet-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.75rem;
+            min-width: 1300px;
+        }
+
+        .sheet-table th {
+            background: #f8fafc;
+            padding: 14px 15px;
+            text-transform: uppercase;
+            font-weight: 800;
+            color: #64748b;
+            border-bottom: 2px solid #e2e8f0;
+            text-align: left;
+        }
+
+        .sheet-table td { padding: 12px 15px; border-bottom: 1px solid #f1f5f9; }
+        .sheet-table tr:hover td { background-color: #f8fafc; }
+
+        .pts-badge {
+            background: #3b82f6;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 99px;
+            font-weight: 800;
+            font-size: 0.7rem;
+        }
+
+        .zoom-controls { position: fixed; bottom: 90px; right: 20px; display: flex; gap: 10px; z-index: 100; }
+        .zoom-btn { background: white; width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); font-weight: 800; cursor: pointer; border: 1px solid #e2e8f0; }
+
+        .viewer-badge {
+            background: linear-gradient(135deg, #f59e0b, #d97706);
+            color: white;
+            font-size: 9px;
+            font-weight: 900;
+            text-transform: uppercase;
+            padding: 4px 10px;
+            border-radius: 4px;
+            letter-spacing: 0.1em;
+            white-space: nowrap;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .goals-display {
+            width: 100%;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 8px 16px;
+            text-align: center;
+            font-weight: 700;
+            color: #1e293b;
+            font-size: 14px;
+        }
+        .goals-display.empty { color: #cbd5e1; font-style: italic; }
+    </style>
+</head>
+<body>
+
+    <header class="p-6 bg-white border-b border-slate-200 no-print flex flex-col md:flex-row justify-between items-center gap-4">
+        <div class="flex items-center gap-6">
+            <h1 class="text-2xl font-black text-slate-800 tracking-tighter">2026 <span class="text-blue-600">STANLEY CUP</span></h1>
+            <div class="flex bg-slate-100 p-1 rounded-lg">
+                <button id="nav-bracket" onclick="switchView('bracket')" class="px-4 py-1.5 rounded-md text-[10px] font-black uppercase bg-blue-600 text-white shadow-sm">Bracket</button>
+                <button id="nav-sheet" onclick="switchView('sheet')" class="px-4 py-1.5 rounded-md text-[10px] font-black uppercase text-slate-500">Spreadsheet Tool</button>
+            </div>
+            <button onclick="openRules()" class="flex items-center gap-2 bg-blue-50 hover:bg-blue-100 text-blue-600 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-colors border border-blue-200">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                Pool Rules
+            </button>
+            <div class="viewer-badge">👁️ Viewer Mode · Read Only</div>
+        </div>
+        
+        <div class="flex items-center gap-3 flex-wrap">
+            <div class="flex items-center gap-1">
+                <div class="relative group">
+                    <select id="predictor-select" onchange="loadEntryFromDropdown(this.value)" class="appearance-none bg-slate-100 border border-slate-200 rounded-lg px-4 py-1.5 text-xs font-bold text-slate-700 outline-none focus:ring-2 focus:ring-blue-500/20 pr-8 cursor-pointer min-w-[200px]">
+                        <option value="__master__">📋 Official Results</option>
+                    </select>
+                    <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-slate-400">
+                        <svg class="w-4 h-4 fill-current" viewBox="0 0 20 20"><path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" /></svg>
+                    </div>
+                </div>
+            </div>
+
+            <div class="h-8 w-px bg-slate-200 mx-1"></div>
+
+            <div id="snapshot-info" class="text-[10px] font-bold text-slate-500 uppercase tracking-widest"></div>
+        </div>
+    </header>
+
+    <div id="bracket-container" class="viewport-container">
+        <div class="bracket-canvas" id="zoom-target">
+            <div class="west-side flex gap-10">
+                <div class="round-column r1">
+                    <div class="round-title">Round 1</div>
+                    <div id="w-r1-m1" class="matchup"></div>
+                    <div id="w-r1-m2" class="matchup"></div>
+                    <div id="w-r1-m3" class="matchup"></div>
+                    <div id="w-r1-m4" class="matchup"></div>
+                </div>
+                <div class="round-column r2">
+                    <div class="round-title">Round 2</div>
+                    <div id="w-r2-m1" class="matchup"></div>
+                    <div id="w-r2-m2" class="matchup"></div>
+                </div>
+                <div class="round-column r3">
+                    <div class="round-title">WCF</div>
+                    <div id="w-r3-m1" class="matchup"></div>
+                </div>
+            </div>
+
+            <div class="flex flex-col items-center px-16 min-w-[340px]">
+                <img src="https://assets.nhle.com/logos/nhl/svg/NHL_light.svg" class="h-10 opacity-20 mb-8" alt="NHL Logo">
+                <div class="text-[10px] font-black text-slate-400 uppercase mb-4 tracking-[0.4em]">Final</div>
+                <div id="final-matchup" class="matchup w-full mb-12"></div>
+                
+                <div id="winner-reveal" class="opacity-0 transition-all duration-1000 transform scale-90">
+                    <div class="bg-white border-[3px] border-blue-600 rounded-[24px] p-8 text-center shadow-2xl relative">
+                        <img id="winner-logo" src="" class="w-20 h-20 mx-auto mb-4" alt="Winner Logo">
+                        <h2 id="winner-name" class="text-xl font-black uppercase text-slate-800"></h2>
+                        <p class="text-[9px] font-bold text-blue-500 uppercase tracking-widest mt-1">2026 Champion</p>
+                    </div>
+                </div>
+
+                <div class="mt-12 w-full max-w-[180px]">
+                    <div class="text-center text-[9px] font-black text-slate-400 uppercase mb-2">Tiebreaker: Total Goals</div>
+                    <div id="tiebreaker-goals-display" class="goals-display empty">—</div>
+                </div>
+            </div>
+
+            <div class="east-side flex flex-row-reverse gap-10">
+                <div class="round-column r1">
+                    <div class="round-title">Round 1</div>
+                    <div id="e-r1-m1" class="matchup"></div>
+                    <div id="e-r1-m2" class="matchup"></div>
+                    <div id="e-r1-m3" class="matchup"></div>
+                    <div id="e-r1-m4" class="matchup"></div>
+                </div>
+                <div class="round-column r2">
+                    <div class="round-title">Round 2</div>
+                    <div id="e-r2-m1" class="matchup"></div>
+                    <div id="e-r2-m2" class="matchup"></div>
+                </div>
+                <div class="round-column r3">
+                    <div class="round-title">ECF</div>
+                    <div id="e-r3-m1" class="matchup"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="sheet-container" class="hidden flex-grow p-8 max-w-[1400px] mx-auto overflow-auto">
+        <div class="flex items-center justify-between mb-6">
+            <h2 class="text-xl font-black text-slate-800 uppercase tracking-tight">Leaderboard & Predictions</h2>
+            <button onclick="exportData()" class="text-[10px] font-black uppercase text-blue-600 bg-blue-50 px-3 py-1 rounded-md border border-blue-100">Export CSV</button>
+        </div>
+        <div class="spreadsheet-container">
+            <table class="sheet-table">
+                <thead>
+                    <tr><th class="w-16">Rank</th><th>Predictor</th><th>Score</th><th>W-R1</th><th>E-R1</th><th>WCF</th><th>ECF</th><th>Champion</th><th>Goals</th><th class="text-center">Actions</th></tr>
+                </thead>
+                <tbody id="sheet-body"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <footer class="leaderboard-footer no-print">
+        <div class="footer-label">Top 10 Predictors</div>
+        <div id="footer-pill-container" class="flex gap-4"></div>
+    </footer>
+
+    <div class="zoom-controls no-print">
+        <button onclick="changeZoom(-0.1)" class="zoom-btn text-xl">-</button>
+        <button onclick="changeZoom(0.1)" class="zoom-btn text-xl">+</button>
+        <button onclick="resetZoom()" class="zoom-btn text-xs">Reset</button>
+    </div>
+
+    <div id="rules-overlay" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-[32px] w-full max-w-2xl overflow-hidden shadow-2xl">
+            <div class="p-8 border-b border-slate-100 flex justify-between items-center bg-blue-600 text-white">
+                <div>
+                    <h3 class="text-xl font-black uppercase tracking-tight">Pool Rules & Scoring</h3>
+                    <p class="text-[10px] font-bold opacity-80 uppercase mt-1">2026 Stanley Cup Prediction Challenge</p>
+                </div>
+                <button onclick="closeRules()" class="opacity-60 hover:opacity-100 font-black text-2xl transition-opacity">×</button>
+            </div>
+            <div class="p-8 max-h-[70vh] overflow-y-auto">
+                <div class="space-y-6">
+                    <section>
+                        <h4 class="text-xs font-black text-blue-600 uppercase mb-3 flex items-center gap-2">
+                            <span class="w-2 h-2 bg-blue-600 rounded-full"></span> Scoring System
+                        </h4>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div class="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                                <div class="text-[9px] font-black text-slate-400 uppercase mb-1">Round 1</div>
+                                <div class="text-lg font-black text-slate-800">1 POINT / SERIES</div>
+                                <p class="text-[10px] text-slate-500">Correct winner <strong>AND</strong> correct games. Max 8 pts.</p>
+                            </div>
+                            <div class="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                                <div class="text-[9px] font-black text-slate-400 uppercase mb-1">Round 2</div>
+                                <div class="text-lg font-black text-slate-800">1 POINT / TEAM</div>
+                                <p class="text-[10px] text-slate-500">Correct team advancing from R1. Max 8 pts.</p>
+                            </div>
+                            <div class="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                                <div class="text-[9px] font-black text-slate-400 uppercase mb-1">Conference Finals</div>
+                                <div class="text-lg font-black text-slate-800">3 POINTS / TEAM</div>
+                                <p class="text-[10px] text-slate-500">Correct team advancing from R2. Max 12 pts.</p>
+                            </div>
+                            <div class="bg-blue-50 p-4 rounded-2xl border border-blue-100">
+                                <div class="text-[9px] font-black text-blue-400 uppercase mb-1">Finals & Champion</div>
+                                <div class="text-lg font-black text-blue-700">5 & 10 PTS</div>
+                                <p class="text-[10px] text-blue-600">5 pts per correct finalist (Max 10). 10 pts for champion.</p>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+            </div>
+            <div class="p-6 bg-slate-50 border-t border-slate-100 flex justify-center">
+                <button onclick="closeRules()" class="bg-blue-600 text-white px-8 py-3 rounded-xl text-xs font-black uppercase tracking-widest hover:scale-105 active:scale-95 transition-all">Understood</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ====================== EMBEDDED SNAPSHOT DATA ======================
+        const SNAPSHOT_DATA = {"entries":[{"id":1777379612999,"name":"WILD BUFFALO - CURTIS PRYMAK","state":{"winners":{"w-r1-m1":"Avalanche","w-r1-m2":"Wild","w-r1-m3":"Golden Knights","w-r1-m4":"Oilers","w-r2-m1":"Wild","w-r2-m2":"Oilers","w-r3-m1":"Wild","e-r1-m1":"Sabres","e-r1-m2":"Canadiens","e-r1-m3":"Hurricanes","e-r1-m4":"Penguins","e-r2-m1":"Sabres","e-r2-m2":"Hurricanes","e-r3-m1":"Sabres","final-matchup":"Wild"},"seriesLength":{"w-r1-m1":5,"w-r1-m2":6,"w-r1-m3":6,"w-r1-m4":6,"e-r1-m1":5,"e-r1-m2":6,"e-r1-m3":6,"e-r1-m4":6},"totalGoals":"37"}},{"id":1777379826600,"name":"PERRY JR. & JESSE MIHALCHEON","state":{"winners":{"w-r1-m1":"Avalanche","w-r1-m2":"Wild","w-r1-m3":"Golden Knights","w-r1-m4":"Oilers","w-r2-m1":"Wild","w-r2-m2":"Oilers","w-r3-m1":"Wild","e-r1-m1":"Sabres","e-r1-m2":"Lightning","e-r2-m1":"Lightning","e-r1-m3":"Hurricanes","e-r1-m4":"Penguins","e-r2-m2":"Hurricanes","e-r3-m1":"Lightning","final-matchup":"Wild"},"seriesLength":{"w-r1-m1":5,"w-r1-m2":6,"w-r1-m3":6,"w-r1-m4":5,"e-r1-m3":5},"totalGoals":"43"}},{"id":1777412545746,"name":"JESSE MIHALCHEON","state":{"winners":{"w-r1-m1":"Avalanche","w-r1-m2":"Wild","w-r1-m3":"Golden Knights","w-r1-m4":"Oilers","w-r2-m1":"Wild","w-r2-m2":"Oilers","w-r3-m1":"Wild","e-r1-m1":"Sabres","e-r1-m2":"Canadiens","e-r1-m3":"Senators","e-r1-m4":"Flyers","e-r2-m1":"Canadiens","e-r2-m2":"Flyers","e-r3-m1":"Flyers","final-matchup":"Wild"},"seriesLength":{"w-r1-m1":4,"w-r1-m3":6,"w-r1-m4":4,"e-r1-m1":6,"e-r1-m2":6},"totalGoals":"45"}},{"id":1777412659776,"name":"JORDON SOLOWAY (2)","state":{"winners":{"w-r1-m1":"Avalanche","w-r1-m2":"Wild","w-r1-m3":"Mammoth","w-r1-m4":"Oilers","e-r1-m1":"Sabres","e-r1-m2":"Lightning","e-r1-m3":"Hurricanes","e-r1-m4":"Flyers","e-r2-m1":"Sabres","e-r2-m2":"Hurricanes","e-r3-m1":"Sabres","w-r2-m1":"Wild","w-r2-m2":"Oilers","w-r3-m1":"Wild","final-matchup":"Wild"},"seriesLength":{"w-r1-m1":4,"w-r1-m4":5,"e-r1-m1":6,"e-r1-m3":5,"e-r1-m4":5},"totalGoals":"33"}},{"id":1777412783815,"name":"G KUHN/D KUHN","state":{"winners":{"w-r1-m1":"Avalanche","w-r1-m2":"Wild","w-r1-m3":"Golden Knights","w-r1-m4":"Oilers","w-r2-m2":"Golden Knights","w-r2-m1":"Wild","w-r3-m1":"Wild","e-r1-m1":"Sabres","e-r1-m2":"Canadiens","e-r1-m3":"Hurricanes","e-r1-m4":"Flyers","e-r2-m1":"Sabres","e-r2-m2":"Hurricanes","e-r3-m1":"Hurricanes","final-matchup":"Wild"},"seriesLength":{"w-r1-m1":5,"w-r1-m2":5,"w-r1-m3":4,"w-r1-m4":6,"e-r1-m2":6,"e-r1-m3":6},"totalGoals":"28"}},{"id":1777412921260,"name":"DUSTIN ANDRUKOW","state":{"winners":{"w-r1-m1":"Avalanche","w-r1-m2":"Wild","w-r1-m3":"Golden Knights","w-r1-m4":"Oilers","w-r2-m1":"Wild","w-r2-m2":"Oilers","w-r3-m1":"Wild","e-r1-m1":"Sabres","e-r1-m2":"Canadiens","e-r1-m3":"Hurricanes","e-r1-m4":"Flyers","e-r2-m1":"Canadiens","e-r2-m2":"Hurricanes","e-r3-m1":"Hurricanes","final-matchup":"Wild"},"seriesLength":{"w-r1-m1":5,"w-r1-m3":6,"w-r1-m4":5,"e-r1-m1":6,"e-r1-m3":4,"e-r1-m4":6},"totalGoals":"39"}},{"id":1777413012914,"name":"SHANE / CHANTELLE","state":{"winners":{"w-r1-m1":"Avalanche","w-r1-m2":"Stars","w-r1-m3":"Golden Knights","w-r1-m4":"Oilers","w-r2-m1":"Avalanche","w-r2-m2":"Golden Knights","w-r3-m1":"Avalanche","e-r1-m1":"Bruins","e-r1-m2":"Canadiens","e-r1-m3":"Senators","e-r1-m4":"Penguins","e-r2-m1":"Canadiens","e-r2-m2":"Senators","e-r3-m1":"Canadiens","final-matchup":"Avalanche"},"seriesLength":{"w-r1-m1":5,"w-r1-m2":6,"w-r1-m3":6,"e-r1-m1":6,"e-r1-m3":5,"e-r1-m4":5},"totalGoals":"42"}},{"id":1777413118652,"name":"LEE GIEBELHAUS (2)","state":{"winners":{"w-r1-m1":"Avalanche","w-r1-m2":"Wild","w-r1-m3":"Golden Knights","w-r1-m4":"Oilers","e-r1-m1":"Sabres","e-r1-m2":"Canadiens","e-r1-m3":"Hurricanes","e-r1-m4":"Flyers","e-r2-m1":"Sabres","e-r2-m2":"Hurricanes","e-r3-m1":"Hurricanes","w-r2-m1":"Avalanche","w-r2-m2":"Golden Knights","w-r3-m1":"Avalanche","final-matchup":"Avalanche"},"seriesLength":{"w-r1-m1":5,"w-r1-m2":6,"w-r1-m3":6,"e-r1-m1":6,"e-r1-m3":6},"totalGoals":"34"}},{"id":1777413203210,"name":"DARCY OCKEY (2)","state":{"winners":{"w-r1-m1":"Avalanche","w-r1-m2":"Wild","w-r1-m3":"Golden Knights","w-r1-m4":"Oilers","w-r2-m1":"Avalanche","w-r2-m2":"Oilers","w-r3-m1":"Avalanche","e-r1-m1":"Sabres","e-r1-m2":"Lightning","e-r1-m3":"Hurricanes","e-r1-m4":"Flyers","e-r2-m1":"Lightning","e-r2-m2":"Hurricanes","e-r3-m1":"Lightning","final-matchup":"Avalanche"},"seriesLength":{"w-r1-m1":6,"w-r1-m3":6,"e-r1-m3":6},"totalGoals":"37"}},{"id":1777413336017,"name":"GARRETT KUHN","state":{"winners":{"w-r1-m1":"Avalanche","w-r1-m3":"Golden Knights","w-r1-m4":"Oilers","e-r1-m1":"Sabres","e-r1-m2":"Lightning","e-r1-m3":"Hurricanes","e-r1-m4":"Flyers","w-r1-m2":"Stars","w-r2-m1":"Avalanche","w-r2-m2":"Golden Knights","w-r3-m1":"Avalanche","e-r2-m1":"Lightning","e-r2-m2":"Hurricanes","e-r3-m1":"Lightning","final-matchup":"Avalanche"},"seriesLength":{"w-r1-m1":4,"w-r1-m3":6,"w-r1-m4":6,"e-r1-m3":4,"e-r1-m4":5},"totalGoals":"36"}},{"id":1777413424691,"name":"TYLER GISLE","state":{"winners":{"w-r1-m1":"Avalanche","w-r1-m2":"Wild","w-r1-m3":"Golden Knights","w-r1-m4":"Oilers","w-r2-m2":"Golden Knights","w-r2-m1":"Avalanche","w-r3-m1":"Avalanche","e-r1-m1":"Sabres","e-r1-m2":"Lightning","e-r1-m3":"Hurricanes","e-r1-m4":"Flyers","e-r2-m1":"Lightning","e-r2-m2":"Flyers","e-r3-m1":"Lightning","final-matchup":"Avalanche"},"seriesLength":{"w-r1-m1":5,"w-r1-m3":6,"w-r1-m4":6,"e-r1-m1":5,"e-r1-m3":6,"e-r1-m4":6},"totalGoals":"47"}},{"id":1777413508473,"name":"JACK / EVAN","state":{"winners":{"w-r1-m1":"Avalanche","w-r1-m2":"Stars","w-r1-m3":"Golden Knights","w-r1-m4":"Oilers","w-r2-m1":"Avalanche","w-r2-m2":"Oilers","w-r3-m1":"Avalanche","e-r1-m1":"Sabres","e-r1-m2":"Lightning","e-r1-m3":"Hurricanes","e-r1-m4":"Penguins","e-r2-m1":"Lightning","e-r2-m2":"Hurricanes","e-r3-m1":"Lightning","final-matchup":"Avalanche"},"seriesLength":{"w-r1-m1":4,"w-r1-m2":5,"w-r1-m3":6,"w-r1-m4":4,"e-r1-m1":5,"e-r1-m2":6,"e-r1-m3":5},"totalGoals":"35"}},{"id":1777413588684,"name":"JAKOB PANTALEON (2)","state":{"winners":{"w-r1-m1":"Avalanche","w-r1-m2":"Stars","w-r1-m3":"Golden Knights","w-r1-m4":"Oilers","w-r2-m1":"Avalanche","w-r2-m2":"Oilers","w-r3-m1":"Avalanche","e-r1-m1":"Sabres","e-r1-m2":"Lightning","e-r1-m3":"Hurricanes","e-r1-m4":"Flyers","e-r2-m1":"Lightning","e-r2-m2":"Hurricanes","e-r3-m1":"Lightning","final-matchup":"Avalanche"},"seriesLength":{"w-r1-m1":5,"w-r1-m2":6,"w-r1-m3":6,"w-r1-m4":5,"e-r1-m2":6,"e-r1-m3":6,"e-r1-m4":6},"totalGoals":"33"}},{"id":1777413666518,"name":"OREST KORPANSKY","state":{"winners":{"w-r1-m1":"Avalanche","w-r1-m2":"Stars","w-r1-m3":"Golden Knights","w-r1-m4":"Oilers","w-r2-m1":"Avalanche","w-r2-m2":"Oilers","w-r3-m1":"Avalanche","e-r1-m1":"Sabres","e-r1-m2":"Canadiens","e-r1-m3":"Hurricanes","e-r1-m4":"Penguins","e-r2-m1":"Sabres","e-r2-m2":"Hurricanes","e-r3-m1":"Sabres","final-matchup":"Avalanche"},"seriesLength":{"w-r1-m1":4,"w-r1-m2":6,"w-r1-m3":5,"w-r1-m4":6,"e-r1-m1":6,"e-r1-m3":5},"totalGoals":"29"}},{"id":1777413836119,"name":"OLD TIMERS - KERRY / GRANDPA","state":{"winners":{"w-r1-m1":"Avalanche","w-r1-m2":"Stars","w-r1-m3":"Golden Knights","w-r1-m4":"Oilers","w-r2-m1":"Avalanche","w-r2-m2":"Oilers","w-r3-m1":"Avalanche","e-r1-m1":"Sabres","e-r1-m2":"Lightning","e-r1-m3":"Hurricanes","e-r1-m4":"Flyers","e-r2-m1":"Sabres","e-r2-m2":"Hurricanes","e-r3-m1":"Sabres","final-matchup":"Avalanche"},"seriesLength":{"w-r1-m1":6,"w-r1-m2":6,"w-r1-m3":6,"e-r1-m1":6,"e-r1-m3":6,"e-r1-m4":6},"totalGoals":"24"}},{"id":1777413938681,"name":"PERRY WIEHART","state":{"winners":{"w-r1-m1":"Avalanche","w-r1-m2":"Wild","w-r1-m3":"Mammoth","w-r1-m4":"Oilers","w-r2-m1":"Avalanche","w-r2-m2":"Oilers","w-r3-m1":"Avalanche","e-r1-m1":"Sabres","e-r1-m2":"Canadiens","e-r1-m3":"Hurricanes","e-r1-m4":"Penguins","e-r2-m1":"Sabres","e-r2-m2":"Hurricanes","e-r3-m1":"Sabres","final-matchup":"Avalanche"},"seriesLength":{"w-r1-m1":5,"w-r1-m4":5,"e-r1-m1":6,"e-r1-m3":6},"totalGoals":"29"}},{"id":1777414028918,"name":"MIKE BODNAR","state":{"winners":{"w-r1-m1":"Avalanche","w-r1-m2":"Stars","w-r1-m3":"Golden Knights","w-r1-m4":"Oilers","w-r2-m1":"Avalanche","w-r2-m2":"Oilers","e-r1-m1":"Sabres","e-r1-m2":"Lightning","e-r1-m3":"Hurricanes","e-r1-m4":"Flyers","e-r2-m1":"Lightning","e-r2-m2":"Hurricanes","e-r3-m1":"Hurricanes","w-r3-m1":"Avalanche","final-matchup":"Avalanche"},"seriesLength":{"w-r1-m1":6,"w-r1-m3":6,"w-r1-m4":6,"e-r1-m1":6,"e-r1-m3":5,"e-r1-m4":6},"totalGoals":"34"}},{"id":1777414102745,"name":"PEDRO / ALDEN","state":{"winners":{"w-r1-m1":"Avalanche","w-r1-m2":"Stars","w-r1-m3":"Golden Knights","w-r1-m4":"Oilers","w-r2-m1":"Avalanche","w-r2-m2":"Oilers","e-r1-m1":"Sabres","e-r1-m2":"Lightning","e-r1-m3":"Hurricanes","e-r1-m4":"Penguins","w-r3-m1":"Avalanche","e-r2-m1":"Lightning","e-r2-m2":"Hurricanes","e-r3-m1":"Hurricanes","final-matchup":"Avalanche"},"seriesLength":{"w-r1-m3":6,"w-r1-m4":6,"e-r1-m1":5,"e-r1-m2":5,"e-r1-m3":6},"totalGoals":"32"}},{"id":1777414180492,"name":"KEVIN LANDRY","state":{"winners":{"w-r1-m1":"Avalanche","w-r1-m2":"Stars","w-r1-m3":"Golden Knights","w-r1-m4":"Ducks","w-r2-m1":"Avalanche","w-r2-m2":"Golden Knights","w-r3-m1":"Avalanche","e-r1-m1":"Bruins","e-r1-m2":"Canadiens","e-r1-m3":"Hurricanes","e-r1-m4":"Penguins","e-r2-m1":"Canadiens","e-r2-m2":"Hurricanes","e-r3-m1":"Hurricanes","final-matchup":"Avalanche"},"seriesLength":{"w-r1-m1":5,"w-r1-m3":6,"w-r1-m4":6,"e-r1-m3":5,"e-r1-m4":6},"totalGoals":"41"}},{"id":1777414291569,"name":"ANDREW SCHMITTLING","state":{"winners":{"w-r1-m1":"Avalanche","w-r1-m2":"Wild","w-r1-m3":"Golden Knights","w-r1-m4":"Oilers","e-r1-m1":"Sabres","e-r1-m2":"Lightning","e-r1-m3":"Hurricanes","e-r1-m4":"Flyers","w-r2-m1":"Avalanche","w-r2-m2":"Oilers","e-r2-m1":"Lightning","e-r2-m2":"Hurricanes","w-r3-m1":"Avalanche","e-r3-m1":"Hurricanes","final-matchup":"Avalanche"},"seriesLength":{"w-r1-m1":5,"w-r1-m2":5,"w-r1-m3":6,"w-r1-m4":6,"e-r1-m2":6,"e-r1-m3":5,"e-r1-m4":6},"totalGoals":"17"}},{"id":1777414446200,"name":"STEPHEN GAUDET","state":{"winners":{"w-r1-m1":"Avalanche","w-r1-m2":"Stars","w-r1-m3":"Golden Knights","w-r1-m4":"Oilers","w-r2-m1":"Avalanche","w-r2-m2":"Oilers","w-r3-m1":"Avalanche","e-r1-m1":"Bruins","e-r1-m2":"Canadiens","e-r1-m3":"Hurricanes","e-r1-m4":"Flyers","e-r2-m1":"Canadiens","e-r2-m2":"Flyers","e-r3-m1":"Canadiens","final-matchup":"Avalanche"},"seriesLength":{"w-r1-m1":4,"w-r1-m2":5,"w-r1-m3":5,"e-r1-m1":4,"e-r1-m2":4,"e-r1-m3":5,"e-r1-m4":4,"w-r1-m4":6},"totalGoals":"27"}},{"id":1777414585149,"name":"DALE / DWAYNE","state":{"winners":{"w-r1-m1":"Avalanche","w-r1-m3":"Golden Knights","w-r1-m4":"Oilers","w-r2-m2":"Oilers","e-r1-m1":"Sabres","e-r1-m2":"Canadiens","e-r1-m3":"Hurricanes","e-r1-m4":"Penguins","e-r2-m1":"Canadiens","e-r2-m2":"Hurricanes","e-r3-m1":"Canadiens","w-r1-m2":"Stars","w-r2-m1":"Avalanche","w-r3-m1":"Avalanche","final-matchup":"Avalanche"},"seriesLength":{"w-r1-m1":4,"w-r1-m2":6,"w-r1-m3":6,"w-r1-m4":6,"e-r1-m1":6,"e-r1-m3":6},"totalGoals":"38"}},{"id":1777414729082,"name":"CHARLIE BJORNSON","state":{"winners":{"w-r1-m1":"Avalanche","w-r1-m2":"Wild","w-r1-m3":"Golden Knights","w-r1-m4":"Oilers","e-r1-m1":"Sabres","e-r1-m2":"Lightning","e-r1-m3":"Hurricanes","e-r1-m4":"Penguins","e-r2-m1":"Lightning","e-r2-m2":"Penguins","e-r3-m1":"Penguins","w-r2-m1":"Avalanche","w-r2-m2":"Golden Knights","w-r3-m1":"Avalanche","final-matchup":"Avalanche"},"seriesLength":{"w-r1-m1":4,"w-r1-m2":6,"w-r1-m3":6,"w-r1-m4":5,"e-r1-m1":5,"e-r1-m3":5,"e-r1-m4":6},"totalGoals":"23"}},{"id":1777414855071,"name":"G KUHN / W KUHN","state":{"winners":{"w-r1-m1":"Avalanche","w-r1-m2":"Wild","w-r1-m3":"Golden Knights","w-r1-m4":"Oilers","w-r2-m1":"Avalanche","e-r1-m1":"Sabres","e-r1-m2":"Canadiens","e-r1-m3":"Senators","e-r1-m4":"Penguins","e-r2-m1":"Canadiens","e-r2-m2":"Penguins","e-r3-m1":"Penguins","w-r2-m2":"Oilers","w-r3-m1":"Avalanche","final-matchup":"Avalanche"},"seriesLength":{"w-r1-m1":6,"w-r1-m3":5,"w-r1-m4":5,"e-r1-m1":6,"e-r1-m3":6},"totalGoals":"39"}},{"id":1777414952747,"name":"G KUHN / JESSE MIHALCHEON","state":{"winners":{"w-r1-m1":"Avalanche","w-r1-m2":"Stars","w-r1-m3":"Mammoth","w-r1-m4":"Oilers","e-r1-m1":"Sabres","e-r1-m2":"Lightning","e-r1-m3":"Senators","e-r1-m4":"Flyers","w-r2-m1":"Stars","w-r2-m2":"Oilers","w-r3-m1":"Oilers","e-r2-m1":"Sabres","e-r2-m2":"Senators","e-r3-m1":"Sabres","final-matchup":"Sabres"},"seriesLength":{"w-r1-m1":5,"w-r1-m4":5,"e-r1-m1":6},"totalGoals":"46"}},{"id":1777465399913,"name":"QINISANI MABALEKA","state":{"winners":{"w-r1-m1":"Avalanche","w-r1-m2":"Stars","w-r1-m3":"Golden Knights","w-r1-m4":"Oilers","w-r2-m1":"Avalanche","w-r2-m2":"Oilers","e-r1-m1":"Sabres","e-r1-m2":"Lightning","e-r1-m3":"Hurricanes","e-r1-m4":"Penguins","e-r2-m1":"Lightning","e-r2-m2":"Hurricanes","w-r3-m1":"Avalanche","e-r3-m1":"Hurricanes","final-matchup":"Avalanche"},"seriesLength":{"w-r1-m2":6,"w-r1-m3":6,"e-r1-m1":6,"e-r1-m3":5,"e-r1-m4":6},"totalGoals":"38"}},{"id":1777465474089,"name":"SELENA STEINBACH","state":{"winners":{"w-r1-m1":"Avalanche","w-r1-m2":"Stars","w-r1-m3":"Golden Knights","w-r1-m4":"Oilers","w-r2-m1":"Avalanche","w-r2-m2":"Golden Knights","w-r3-m1":"Avalanche","e-r1-m1":"Sabres","e-r1-m2":"Lightning","e-r1-m3":"Hurricanes","e-r1-m4":"Penguins","e-r2-m1":"Sabres","e-r2-m2":"Hurricanes","e-r3-m1":"Sabres","final-matchup":"Avalanche"},"seriesLength":{"w-r1-m1":4,"w-r1-m3":6,"w-r1-m4":6,"e-r1-m2":6,"e-r1-m3":4},"totalGoals":"28"}},{"id":1777465587170,"name":"LEE GIEBELHAUS","state":{"winners":{"w-r1-m1":"Avalanche","w-r1-m2":"Stars","w-r1-m3":"Mammoth","w-r1-m4":"Oilers","w-r2-m1":"Avalanche","w-r2-m2":"Oilers","w-r3-m1":"Oilers","e-r1-m1":"Sabres","e-r1-m2":"Lightning","e-r1-m3":"Hurricanes","e-r1-m4":"Penguins","e-r2-m1":"Lightning","e-r2-m2":"Penguins","e-r3-m1":"Penguins","final-matchup":"Oilers"},"seriesLength":{"w-r1-m1":5,"w-r1-m2":6,"w-r1-m3":6,"w-r1-m4":6,"e-r1-m1":6,"e-r1-m2":6,"e-r1-m3":6,"e-r1-m4":6},"totalGoals":"47"}},{"id":1777465699420,"name":"DOUG / LYLE","state":{"winners":{"w-r1-m1":"Avalanche","w-r1-m2":"Wild","w-r1-m3":"Golden Knights","w-r1-m4":"Oilers","w-r2-m1":"Avalanche","w-r2-m2":"Oilers","w-r3-m1":"Oilers","e-r1-m1":"Sabres","e-r1-m2":"Lightning","e-r1-m3":"Hurricanes","e-r1-m4":"Flyers","e-r2-m1":"Lightning","e-r2-m2":"Hurricanes","e-r3-m1":"Lightning","final-matchup":"Oilers"},"seriesLength":{"w-r1-m1":4,"w-r1-m2":5,"w-r1-m3":4,"w-r1-m4":6,"e-r1-m1":6,"e-r1-m3":5},"totalGoals":"48"}},{"id":1777465784044,"name":"LANCE DEACON","state":{"winners":{"w-r1-m1":"Avalanche","w-r1-m2":"Wild","w-r1-m3":"Mammoth","w-r1-m4":"Oilers","w-r2-m1":"Avalanche","w-r2-m2":"Oilers","w-r3-m1":"Oilers","e-r1-m1":"Sabres","e-r1-m2":"Canadiens","e-r1-m3":"Hurricanes","e-r1-m4":"Flyers","e-r2-m1":"Sabres","e-r2-m2":"Hurricanes","e-r3-m1":"Hurricanes","final-matchup":"Oilers"},"seriesLength":{"w-r1-m1":5,"w-r1-m2":6,"w-r1-m3":6,"w-r1-m4":5,"e-r1-m1":6,"e-r1-m3":6,"e-r1-m4":5},"totalGoals":"40"}},{"id":1777465885301,"name":"BOSSE BROTHER'S","state":{"winners":{"w-r1-m1":"Avalanche","w-r1-m2":"Stars","w-r1-m3":"Golden Knights","w-r1-m4":"Oilers","w-r2-m1":"Avalanche","w-r2-m2":"Oilers","w-r3-m1":"Oilers","e-r1-m1":"Sabres","e-r1-m2":"Lightning","e-r1-m3":"Hurricanes","e-r1-m4":"Penguins","e-r2-m1":"Sabres","e-r2-m2":"Hurricanes","e-r3-m1":"Hurricanes","final-matchup":"Oilers"},"seriesLength":{"w-r1-m1":6,"w-r1-m3":5,"w-r1-m4":6,"e-r1-m1":5,"e-r1-m3":6},"totalGoals":"21"}},{"id":1777465978525,"name":"ARIC DIAMOND / DYLAN BAUER","state":{"winners":{"w-r1-m1":"Avalanche","w-r1-m2":"Stars","w-r1-m3":"Golden Knights","w-r1-m4":"Oilers","w-r2-m1":"Avalanche","w-r2-m2":"Oilers","w-r3-m1":"Oilers","e-r1-m1":"Sabres","e-r1-m2":"Lightning","e-r1-m3":"Hurricanes","e-r1-m4":"Flyers","e-r2-m1":"Lightning","e-r2-m2":"Hurricanes","e-r3-m1":"Hurricanes","final-matchup":"Oilers"},"seriesLength":{"w-r1-m1":6,"w-r1-m3":6,"w-r1-m4":6,"e-r1-m2":6,"e-r1-m3":6},"totalGoals":"43"}},{"id":1777466044854,"name":"RAW DOGS - CURTIS PRYMAK","state":{"winners":{"w-r1-m1":"Avalanche","w-r1-m2":"Wild","w-r1-m3":"Golden Knights","w-r1-m4":"Oilers","w-r2-m1":"Wild","w-r2-m2":"Oilers","w-r3-m1":"Oilers","e-r1-m1":"Sabres","e-r1-m2":"Canadiens","e-r1-m3":"Hurricanes","e-r1-m4":"Flyers","e-r2-m1":"Canadiens","e-r2-m2":"Hurricanes","e-r3-m1":"Hurricanes","final-matchup":"Oilers"},"seriesLength":{"w-r1-m1":5,"w-r1-m2":6,"w-r1-m3":6,"w-r1-m4":6,"e-r1-m1":6,"e-r1-m2":6,"e-r1-m3":6,"e-r1-m4":6},"totalGoals":"36"}},{"id":1777466120592,"name":"LEE EWASCHUK","state":{"winners":{"w-r1-m1":"Avalanche","w-r1-m2":"Wild","w-r1-m3":"Golden Knights","w-r1-m4":"Oilers","w-r2-m1":"Avalanche","w-r2-m2":"Oilers","e-r1-m1":"Sabres","e-r1-m2":"Canadiens","e-r1-m3":"Hurricanes","e-r1-m4":"Penguins","e-r2-m1":"Canadiens","e-r2-m2":"Hurricanes","e-r3-m1":"Hurricanes","w-r3-m1":"Oilers","final-matchup":"Oilers"},"seriesLength":{"w-r1-m1":6,"w-r1-m3":6,"w-r1-m4":5,"e-r1-m1":6,"e-r1-m3":6},"totalGoals":"42"}},{"id":1777466209648,"name":"JARED STEINBACH","state":{"winners":{"w-r1-m1":"Avalanche","w-r1-m2":"Wild","w-r1-m3":"Golden Knights","w-r1-m4":"Oilers","w-r2-m1":"Wild","w-r2-m2":"Oilers","w-r3-m1":"Oilers","e-r1-m1":"Sabres","e-r1-m2":"Lightning","e-r1-m3":"Hurricanes","e-r1-m4":"Penguins","e-r2-m1":"Lightning","e-r2-m2":"Hurricanes","e-r3-m1":"Hurricanes","final-matchup":"Oilers"},"seriesLength":{"w-r1-m1":6,"w-r1-m3":6,"w-r1-m4":5,"e-r1-m2":6,"e-r1-m3":5},"totalGoals":"37"}},{"id":1777466282985,"name":"TAMARA / MEGAN / JORDAN","state":{"winners":{"w-r1-m1":"Avalanche","w-r1-m2":"Wild","w-r1-m3":"Golden Knights","w-r1-m4":"Oilers","w-r2-m1":"Avalanche","w-r2-m2":"Oilers","e-r1-m1":"Sabres","e-r1-m2":"Lightning","e-r1-m3":"Hurricanes","e-r1-m4":"Penguins","e-r2-m1":"Lightning","e-r2-m2":"Hurricanes","e-r3-m1":"Hurricanes","w-r3-m1":"Oilers","final-matchup":"Oilers"},"seriesLength":{"w-r1-m1":5,"w-r1-m3":6,"w-r1-m4":6,"e-r1-m1":6,"e-r1-m2":5,"e-r1-m3":6},"totalGoals":"34"}},{"id":1777466350089,"name":"ALDEN MANABAT","state":{"winners":{"w-r1-m1":"Avalanche","w-r1-m2":"Stars","w-r1-m3":"Golden Knights","w-r1-m4":"Oilers","w-r2-m1":"Stars","w-r2-m2":"Oilers","w-r3-m1":"Oilers","e-r1-m1":"Sabres","e-r1-m2":"Lightning","e-r1-m3":"Hurricanes","e-r1-m4":"Penguins","e-r2-m1":"Sabres","e-r2-m2":"Hurricanes","e-r3-m1":"Sabres","final-matchup":"Oilers"},"seriesLength":{"w-r1-m3":6,"w-r1-m4":6,"e-r1-m1":5,"e-r1-m2":5,"e-r1-m3":6},"totalGoals":"28"}},{"id":1777466498555,"name":"BRENDA ZACHARUK","state":{"winners":{"w-r1-m1":"Avalanche","w-r1-m2":"Stars","w-r1-m3":"Golden Knights","w-r1-m4":"Oilers","w-r2-m1":"Avalanche","w-r2-m2":"Oilers","w-r3-m1":"Oilers","e-r1-m1":"Sabres","e-r1-m2":"Canadiens","e-r1-m3":"Hurricanes","e-r1-m4":"Penguins","e-r2-m1":"Sabres","e-r2-m2":"Hurricanes","e-r3-m1":"Sabres","final-matchup":"Oilers"},"seriesLength":{"w-r1-m1":6,"w-r1-m3":6,"w-r1-m4":5,"e-r1-m1":6,"e-r1-m2":5,"e-r1-m4":6},"totalGoals":"26"}},{"id":1777466570348,"name":"JORDON SOLOWAY","state":{"winners":{"w-r1-m1":"Avalanche","w-r1-m2":"Wild","w-r1-m3":"Golden Knights","w-r1-m4":"Oilers","w-r2-m1":"Avalanche","w-r2-m2":"Oilers","w-r3-m1":"Oilers","e-r1-m1":"Sabres","e-r1-m2":"Canadiens","e-r1-m3":"Hurricanes","e-r1-m4":"Penguins","e-r2-m1":"Canadiens","e-r2-m2":"Hurricanes","e-r3-m1":"Canadiens","final-matchup":"Oilers"},"seriesLength":{"w-r1-m1":4,"w-r1-m4":5,"e-r1-m1":6,"e-r1-m3":4},"totalGoals":"32"}},{"id":1777466650253,"name":"HARRISON SOUKUP","state":{"winners":{"w-r1-m1":"Avalanche","w-r1-m2":"Wild","w-r1-m3":"Mammoth","w-r1-m4":"Oilers","w-r2-m1":"Wild","w-r2-m2":"Oilers","w-r3-m1":"Oilers","e-r1-m1":"Sabres","e-r1-m2":"Canadiens","e-r1-m3":"Hurricanes","e-r1-m4":"Penguins","e-r2-m1":"Canadiens","e-r2-m2":"Penguins","e-r3-m1":"Canadiens","final-matchup":"Oilers"},"seriesLength":{"w-r1-m1":5,"w-r1-m2":6,"w-r1-m4":6,"e-r1-m3":6},"totalGoals":"45"}},{"id":1777466715629,"name":"SOWCHY","state":{"winners":{"w-r1-m1":"Avalanche","w-r1-m2":"Stars","w-r1-m3":"Golden Knights","w-r1-m4":"Oilers","w-r2-m1":"Avalanche","w-r2-m2":"Oilers","w-r3-m1":"Oilers","e-r1-m1":"Sabres","e-r1-m2":"Lightning","e-r1-m3":"Hurricanes","e-r1-m4":"Flyers","e-r2-m1":"Lightning","e-r2-m2":"Flyers","e-r3-m1":"Flyers","final-matchup":"Oilers"},"seriesLength":{"w-r1-m1":6,"w-r1-m2":6,"w-r1-m3":6,"e-r1-m1":6,"e-r1-m3":6},"totalGoals":"26"}},{"id":1777466813623,"name":"KYLE CHILIBECK","state":{"winners":{"w-r1-m1":"Avalanche","w-r1-m2":"Wild","w-r1-m3":"Golden Knights","w-r1-m4":"Oilers","w-r2-m1":"Avalanche","w-r2-m2":"Oilers","w-r3-m1":"Avalanche","e-r1-m1":"Sabres","e-r1-m2":"Canadiens","e-r1-m3":"Hurricanes","e-r1-m4":"Penguins","e-r2-m1":"Canadiens","e-r2-m2":"Hurricanes","e-r3-m1":"Hurricanes","final-matchup":"Hurricanes"},"seriesLength":{"w-r1-m1":4,"w-r1-m2":6,"w-r1-m3":4,"w-r1-m4":5,"e-r1-m1":6,"e-r1-m3":5,"e-r1-m4":6},"totalGoals":"38"}},{"id":1777466894951,"name":"ARIC DIAMOND / SELENA STEINBACH","state":{"winners":{"w-r1-m1":"Avalanche","w-r1-m2":"Wild","w-r1-m3":"Golden Knights","w-r1-m4":"Oilers","e-r1-m1":"Sabres","e-r1-m2":"Canadiens","e-r1-m3":"Hurricanes","e-r1-m4":"Flyers","e-r2-m1":"Sabres","e-r2-m2":"Hurricanes","e-r3-m1":"Hurricanes","w-r2-m1":"Wild","w-r2-m2":"Oilers","w-r3-m1":"Wild","final-matchup":"Hurricanes"},"seriesLength":{"w-r1-m1":6,"w-r1-m3":6,"w-r1-m4":6,"e-r1-m2":6,"e-r1-m3":6},"totalGoals":"45"}},{"id":1777466982175,"name":"JAKOB PANTALEON (1)","state":{"winners":{"w-r1-m1":"Avalanche","w-r1-m2":"Stars","w-r1-m3":"Golden Knights","w-r1-m4":"Oilers","w-r2-m1":"Stars","w-r2-m2":"Oilers","w-r3-m1":"Stars","e-r1-m1":"Sabres","e-r1-m2":"Lightning","e-r1-m3":"Hurricanes","e-r1-m4":"Flyers","e-r2-m1":"Lightning","e-r2-m2":"Hurricanes","e-r3-m1":"Hurricanes","final-matchup":"Hurricanes"},"seriesLength":{"w-r1-m1":6,"w-r1-m2":6,"w-r1-m4":6,"e-r1-m1":6,"e-r1-m2":6,"e-r1-m3":6},"totalGoals":"35"}},{"id":1777467118210,"name":"JEFF DERDA / LANCE DEACON","state":{"winners":{"w-r1-m1":"Avalanche","w-r1-m2":"Stars","w-r1-m3":"Golden Knights","w-r1-m4":"Oilers","w-r2-m1":"Avalanche","w-r2-m2":"Golden Knights","w-r3-m1":"Avalanche","e-r1-m1":"Sabres","e-r1-m2":"Lightning","e-r1-m3":"Hurricanes","e-r1-m4":"Flyers","e-r2-m1":"Lightning","e-r2-m2":"Hurricanes","e-r3-m1":"Lightning","final-matchup":"Lightning"},"seriesLength":{"w-r1-m1":5,"w-r1-m3":5,"w-r1-m4":6,"e-r1-m1":6,"e-r1-m2":6,"e-r1-m3":5,"e-r1-m4":5},"totalGoals":"39"}},{"id":1777467225002,"name":"PETER MACUTE","state":{"winners":{"w-r1-m1":"Avalanche","w-r1-m2":"Stars","w-r1-m3":"Golden Knights","w-r1-m4":"Oilers","w-r2-m1":"Avalanche","w-r2-m2":"Oilers","w-r3-m1":"Avalanche","e-r1-m1":"Sabres","e-r1-m2":"Lightning","e-r1-m3":"Senators","e-r1-m4":"Penguins","e-r2-m2":"Penguins","e-r2-m1":"Lightning","e-r3-m1":"Lightning","final-matchup":"Lightning"},"seriesLength":{"w-r1-m1":6,"w-r1-m3":6,"e-r1-m3":6,"e-r1-m4":6},"totalGoals":"32"}},{"id":1777468194939,"name":"ANDREW DALPE","state":{"winners":{"w-r1-m1":"Avalanche","w-r1-m2":"Wild","w-r1-m3":"Golden Knights","w-r1-m4":"Oilers","w-r2-m1":"Avalanche","w-r2-m2":"Oilers","w-r3-m1":"Oilers","e-r1-m1":"Sabres","e-r1-m2":"Canadiens","e-r1-m3":"Hurricanes","e-r1-m4":"Penguins","e-r2-m1":"Canadiens","e-r2-m2":"Penguins","e-r3-m1":"Canadiens","final-matchup":"Canadiens"},"seriesLength":{"w-r1-m1":5,"w-r1-m2":6,"w-r1-m3":6,"w-r1-m4":5,"e-r1-m1":6,"e-r1-m2":6,"e-r1-m3":5,"e-r1-m4":6},"totalGoals":"27"}},{"id":1777468274499,"name":"DARCY OCKEY (1)","state":{"winners":{"w-r1-m1":"Avalanche","w-r1-m2":"Stars","w-r1-m3":"Golden Knights","w-r1-m4":"Oilers","w-r2-m1":"Stars","w-r2-m2":"Golden Knights","w-r3-m1":"Stars","e-r1-m1":"Sabres","e-r1-m2":"Canadiens","e-r1-m3":"Hurricanes","e-r1-m4":"Penguins","e-r2-m1":"Canadiens","e-r2-m2":"Penguins","e-r3-m1":"Canadiens","final-matchup":"Canadiens"},"seriesLength":{"w-r1-m1":5,"w-r1-m3":5,"w-r1-m4":6,"e-r1-m3":5},"totalGoals":"28"}},{"id":1777468361212,"name":"JESSE MIHALCHEON / DYLAN BAUER","state":{"winners":{"w-r1-m1":"Avalanche","w-r1-m2":"Stars","w-r1-m3":"Mammoth","w-r1-m4":"Oilers","w-r2-m1":"Avalanche","w-r2-m2":"Oilers","w-r3-m1":"Avalanche","e-r1-m1":"Sabres","e-r1-m2":"Canadiens","e-r1-m3":"Senators","e-r1-m4":"Flyers","e-r2-m1":"Canadiens","e-r2-m2":"Flyers","e-r3-m1":"Canadiens","final-matchup":"Canadiens"},"seriesLength":{"w-r1-m1":5,"w-r1-m4":5,"e-r1-m1":6,"e-r1-m4":6},"totalGoals":"39"}},{"id":1777468500285,"name":"CHAS MIKKELSEN","state":{"winners":{"w-r1-m1":"Avalanche","w-r1-m2":"Wild","w-r1-m3":"Golden Knights","w-r1-m4":"Oilers","w-r2-m1":"Wild","w-r2-m2":"Oilers","w-r3-m1":"Wild","e-r1-m1":"Sabres","e-r1-m2":"Canadiens","e-r1-m3":"Hurricanes","e-r1-m4":"Penguins","e-r2-m1":"Canadiens","e-r2-m2":"Hurricanes","e-r3-m1":"Hurricanes","final-matchup":"Wild"},"seriesLength":{"w-r1-m1":5,"w-r1-m3":5,"w-r1-m4":6,"e-r1-m3":5},"totalGoals":"31"}}],"master":{"winners":{"w-r1-m1":"Avalanche","e-r1-m3":"Hurricanes"},"seriesLength":{"e-r1-m1":7,"e-r1-m2":7,"e-r1-m3":4,"e-r1-m4":7,"w-r1-m1":4,"w-r1-m2":7,"w-r1-m3":7,"w-r1-m4":7},"totalGoals":""},"exportedAt":"2026-05-03T21:32:10.387Z"};
+        // ====================================================================
+
+        const LOGOS = {
+            'Avalanche': 'https://assets.nhle.com/logos/nhl/svg/COL_light.svg', 'Kings': 'https://assets.nhle.com/logos/nhl/svg/LAK_light.svg',
+            'Stars': 'https://assets.nhle.com/logos/nhl/svg/DAL_light.svg', 'Wild': 'https://assets.nhle.com/logos/nhl/svg/MIN_light.svg',
+            'Golden Knights': 'https://assets.nhle.com/logos/nhl/svg/VGK_light.svg', 'Mammoth': 'https://assets.nhle.com/logos/nhl/svg/UTA_light.svg',
+            'Oilers': 'https://assets.nhle.com/logos/nhl/svg/EDM_light.svg', 'Ducks': 'https://assets.nhle.com/logos/nhl/svg/ANA_light.svg',
+            'Sabres': 'https://assets.nhle.com/logos/nhl/svg/BUF_light.svg', 'Bruins': 'https://assets.nhle.com/logos/nhl/svg/BOS_light.svg',
+            'Lightning': 'https://assets.nhle.com/logos/nhl/svg/TBL_light.svg', 'Canadiens': 'https://assets.nhle.com/logos/nhl/svg/MTL_light.svg',
+            'Hurricanes': 'https://assets.nhle.com/logos/nhl/svg/CAR_light.svg', 'Senators': 'https://assets.nhle.com/logos/nhl/svg/OTT_light.svg',
+            'Penguins': 'https://assets.nhle.com/logos/nhl/svg/PIT_light.svg', 'Flyers': 'https://assets.nhle.com/logos/nhl/svg/PHI_light.svg'
+        };
+
+        const SEEDS = {
+            'w-r1-m1': { t1: { name: 'Avalanche', s: 'C1' }, t2: { name: 'Kings', s: 'WC2' } },
+            'w-r1-m2': { t1: { name: 'Stars', s: 'C2' }, t2: { name: 'Wild', s: 'C3' } },
+            'w-r1-m3': { t1: { name: 'Golden Knights', s: 'P1' }, t2: { name: 'Mammoth', s: 'WC1' } },
+            'w-r1-m4': { t1: { name: 'Oilers', s: 'P2' }, t2: { name: 'Ducks', s: 'P3' } },
+            'e-r1-m1': { t1: { name: 'Sabres', s: 'A1' }, t2: { name: 'Bruins', s: 'WC1' } },
+            'e-r1-m2': { t1: { name: 'Lightning', s: 'A2' }, t2: { name: 'Canadiens', s: 'A3' } },
+            'e-r1-m3': { t1: { name: 'Hurricanes', s: 'M1' }, t2: { name: 'Senators', s: 'WC2' } },
+            'e-r1-m4': { t1: { name: 'Penguins', s: 'M2' }, t2: { name: 'Flyers', s: 'M3' } }
+        };
+
+        let state = { winners: {}, seriesLength: {}, totalGoals: "" };
+        let master = { winners: {}, seriesLength: {}, totalGoals: "" };
+        let entries = [];
+        let zoom = 1.0;
+
+        function init() {
+            try {
+                if (SNAPSHOT_DATA && typeof SNAPSHOT_DATA === 'object') {
+                    entries = SNAPSHOT_DATA.entries || [];
+                    master = SNAPSHOT_DATA.master || { winners: {}, seriesLength: {}, totalGoals: "" };
+                    if (SNAPSHOT_DATA.exportedAt) {
+                        const d = new Date(SNAPSHOT_DATA.exportedAt);
+                        document.getElementById('snapshot-info').textContent = 'Snapshot: ' + d.toLocaleString();
+                    }
+                }
+            } catch (e) {
+                console.error('Failed to load snapshot data:', e);
+            }
+            // Default view: Official Results (master sheet)
+            state = JSON.parse(JSON.stringify(master));
+            _viewingMaster = true;
+            updatePredictorDropdown();
+            updateUI();
+            updateFooterLeaderboard();
+        }
+
+        function switchView(v) {
+            document.getElementById('bracket-container').classList.toggle('hidden', v === 'sheet');
+            document.getElementById('sheet-container').classList.toggle('hidden', v === 'bracket');
+            
+            const navBracket = document.getElementById('nav-bracket');
+            const navSheet = document.getElementById('nav-sheet');
+            
+            if (v === 'bracket') {
+                navBracket.className = "px-4 py-1.5 rounded-md text-[10px] font-black uppercase bg-blue-600 text-white shadow-sm";
+                navSheet.className = "px-4 py-1.5 rounded-md text-[10px] font-black uppercase text-slate-500 hover:text-slate-700";
+            } else {
+                navBracket.className = "px-4 py-1.5 rounded-md text-[10px] font-black uppercase text-slate-500 hover:text-slate-700";
+                navSheet.className = "px-4 py-1.5 rounded-md text-[10px] font-black uppercase bg-blue-600 text-white shadow-sm";
+                renderSheet();
+            }
+        }
+
+        function renderMatch(id, t1, t2) {
+            const el = document.getElementById(id);
+            if (!el) return;
+            const win = state.winners[id];
+            const len = state.seriesLength[id] || 7;
+            
+            const slot = (t) => {
+                if (!t || !t.name) return `<div class="team-slot empty"><span class="text-[10px] font-black opacity-10">TBD</span></div>`;
+                const isWinner = win === t.name;
+                const isLoser = win && win !== t.name;
+                
+                let masterClass = "";
+                // Compare current viewed entry against master (only if viewing a non-master entry)
+                if (!viewingMaster() && master.winners[id]) {
+                     if (master.winners[id] === t.name && isWinner) {
+                        masterClass = "ring-2 ring-green-500";
+                     } else if (isWinner && master.winners[id] !== t.name) {
+                        masterClass = "ring-2 ring-red-500";
+                     }
+                }
+
+                let classes = `team-slot ${masterClass}`;
+                if (isWinner) classes += " winner";
+                else if (isLoser) classes += " loser";
+
+                return `<div class="${classes}">
+                    <div class="flex items-center">
+                        <span class="seed-label">${t.s || ''}</span>
+                        <img src="${LOGOS[t.name]}" class="team-logo" alt="${t.name}">
+                        <span class="text-[10px] font-black uppercase">${t.name}</span>
+                    </div>
+                </div>`;
+            };
+
+            let seriesDisplayHTML = "";
+            if (id.includes('r1')) {
+                let lenClass = "";
+                if (!viewingMaster() && master.seriesLength[id]) {
+                    if (master.seriesLength[id] == len) lenClass = "ring-2 ring-green-500";
+                    else lenClass = "ring-2 ring-red-500";
+                }
+                seriesDisplayHTML = `<div class="series-label-box"><div class="series-text">Series</div><div class="games-display ${lenClass}">${len}</div></div>`;
+            }
+
+            el.innerHTML = `${seriesDisplayHTML}${slot(t1)}${slot(t2)}`;
+        }
+
+        // Track whether the viewer is currently displaying the master sheet (no entry selected = blank)
+        // The dropdown represents user-saved entries. When no entry is selected, state is empty.
+        let _viewingMaster = false;
+        function viewingMaster() { return _viewingMaster; }
+
+        function updateUI() {
+            Object.keys(SEEDS).forEach(id => renderMatch(id, SEEDS[id].t1, SEEDS[id].t2));
+            ['w-r2-m1','w-r2-m2','e-r2-m1','e-r2-m2'].forEach(id => {
+                const parts = id.split('-');
+                const prev = parts[0] + '-r1-m' + (id.endsWith('1') ? '1' : '3');
+                const prev2 = parts[0] + '-r1-m' + (id.endsWith('1') ? '2' : '4');
+                renderMatch(id, {name: state.winners[prev]}, {name: state.winners[prev2]});
+            });
+            renderMatch('w-r3-m1', {name: state.winners['w-r2-m1']}, {name: state.winners['w-r2-m2']});
+            renderMatch('e-r3-m1', {name: state.winners['e-r2-m1']}, {name: state.winners['e-r2-m2']});
+            renderMatch('final-matchup', {name: state.winners['w-r3-m1']}, {name: state.winners['e-r3-m1']});
+            
+            const champ = state.winners['final-matchup'];
+            const reveal = document.getElementById('winner-reveal');
+            if (champ) {
+                document.getElementById('winner-logo').src = LOGOS[champ];
+                document.getElementById('winner-name').innerText = champ;
+                reveal.classList.remove('opacity-0', 'scale-90');
+            } else { reveal.classList.add('opacity-0', 'scale-90'); }
+            
+            const goalsEl = document.getElementById('tiebreaker-goals-display');
+            if (state.totalGoals) {
+                goalsEl.textContent = state.totalGoals;
+                goalsEl.classList.remove('empty');
+            } else {
+                goalsEl.textContent = '—';
+                goalsEl.classList.add('empty');
+            }
+        }
+
+        function calcScore(e) {
+            let pts = 0;
+            const p = e.state.winners;
+            const m = master.winners;
+            const pLen = e.state.seriesLength || {};
+            const mLen = master.seriesLength || {};
+            
+            Object.keys(SEEDS).forEach(id => {
+                if (m[id] && p[id] === m[id]) {
+                    if (mLen[id] && (pLen[id] || 7) == mLen[id]) {
+                        pts += 1;
+                    }
+                }
+            });
+            
+            ['w-r2-m1', 'w-r2-m2', 'e-r2-m1', 'e-r2-m2'].forEach(id => {
+                const parts = id.split('-');
+                const prev1 = parts[0] + '-r1-m' + (id.endsWith('1') ? '1' : '3');
+                const prev2 = parts[0] + '-r1-m' + (id.endsWith('1') ? '2' : '4');
+                
+                const pTeams = [p[prev1], p[prev2]].filter(Boolean);
+                const mTeams = [m[prev1], m[prev2]].filter(Boolean);
+                
+                pTeams.forEach(team => {
+                    if (mTeams.includes(team)) pts += 1;
+                });
+            });
+            
+            ['w-r3-m1', 'e-r3-m1'].forEach(id => {
+                const parts = id.split('-');
+                const prev1 = parts[0] + '-r2-m1';
+                const prev2 = parts[0] + '-r2-m2';
+                
+                const pTeams = [p[prev1], p[prev2]].filter(Boolean);
+                const mTeams = [m[prev1], m[prev2]].filter(Boolean);
+                
+                pTeams.forEach(team => {
+                    if (mTeams.includes(team)) pts += 3;
+                });
+            });
+            
+            const pFinalists = [p['w-r3-m1'], p['e-r3-m1']].filter(Boolean);
+            const mFinalists = [m['w-r3-m1'], m['e-r3-m1']].filter(Boolean);
+            pFinalists.forEach(team => {
+                if (mFinalists.includes(team)) pts += 5;
+            });
+            
+            if (m['final-matchup'] && p['final-matchup'] === m['final-matchup']) pts += 10;
+
+            return pts;
+        }
+
+        function loadEntryFromDropdown(val) {
+            if (!val || val === '__master__') {
+                // Show official results / master sheet
+                state = JSON.parse(JSON.stringify(master));
+                _viewingMaster = true;
+            } else {
+                const entry = entries.find(e => e.id === Number(val));
+                if (entry) {
+                    state = JSON.parse(JSON.stringify(entry.state));
+                    _viewingMaster = false;
+                }
+            }
+            updateUI();
+        }
+
+        function updateFooterLeaderboard() {
+            const container = document.getElementById('footer-pill-container');
+            const sorted = entries.map(e => ({...e, score: calcScore(e)})).sort((a,b) => b.score - a.score).slice(0, 10);
+            container.innerHTML = sorted.map((e, idx) => `
+                <div class="predictor-pill cursor-pointer hover:bg-blue-50" onclick="loadEntryAndSelect('${e.id}')">
+                    <span class="pill-rank">#${idx+1}</span>
+                    <span class="pill-name">${e.name}</span>
+                    <span class="pill-pts">${e.score} PTS</span>
+                </div>
+            `).join('');
+        }
+        
+        function loadEntryAndSelect(id) {
+            document.getElementById('predictor-select').value = id;
+            loadEntryFromDropdown(id);
+            switchView('bracket');
+        }
+
+        function updatePredictorDropdown() {
+            const select = document.getElementById('predictor-select');
+            const currentVal = select.value;
+            let optionsHTML = '<option value="__master__">📋 Official Results</option>';
+            const ranked = entries.map(e => ({...e, score: calcScore(e)})).sort((a,b) => b.score - a.score);
+            ranked.forEach((e, i) => {
+                optionsHTML += `<option value="${e.id}">${i+1}. ${e.name} (${e.score} pts)</option>`;
+            });
+            select.innerHTML = optionsHTML;
+            // Default to Official Results when no prior selection
+            select.value = currentVal || "__master__";
+        }
+
+        function renderSheet() {
+            const tbody = document.getElementById('sheet-body');
+            const ranked = entries.map(e => ({...e, score: calcScore(e)})).sort((a,b) => b.score - a.score);
+            const getTeamOrTbd = (val) => val ? `<span class="font-bold text-slate-700">${val}</span>` : `<span class="text-slate-300 italic">TBD</span>`;
+            tbody.innerHTML = ranked.map((e, idx) => {
+                const w1 = [e.state.winners['w-r1-m1'], e.state.winners['w-r1-m2'], e.state.winners['w-r1-m3'], e.state.winners['w-r1-m4']].filter(Boolean).length;
+                const e1 = [e.state.winners['e-r1-m1'], e.state.winners['e-r1-m2'], e.state.winners['e-r1-m3'], e.state.winners['e-r1-m4']].filter(Boolean).length;
+                return `
+                <tr>
+                    <td><div class="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center font-black text-xs text-slate-500">${idx+1}</div></td>
+                    <td class="font-black text-slate-800">${e.name}</td>
+                    <td><span class="pts-badge">${e.score}</span></td>
+                    <td class="text-xs">${w1}/4 picked</td>
+                    <td class="text-xs">${e1}/4 picked</td>
+                    <td class="text-xs">${getTeamOrTbd(e.state.winners['w-r3-m1'])}</td>
+                    <td class="text-xs">${getTeamOrTbd(e.state.winners['e-r3-m1'])}</td>
+                    <td><div class="flex items-center gap-2">${e.state.winners['final-matchup'] ? `<img src="${LOGOS[e.state.winners['final-matchup']]}" class="w-5 h-5">` : ''}${getTeamOrTbd(e.state.winners['final-matchup'])}</div></td>
+                    <td class="font-bold text-slate-500">${e.state.totalGoals || '-'}</td>
+                    <td class="text-center">
+                        <button onclick="loadEntryAndSelect('${e.id}')" class="text-blue-500 hover:text-blue-700 text-xs font-bold uppercase">View</button>
+                    </td>
+                </tr>`}).join('');
+        }
+
+        function openRules() { document.getElementById('rules-overlay').classList.remove('hidden'); }
+        function closeRules() { document.getElementById('rules-overlay').classList.add('hidden'); }
+        function changeZoom(delta) { zoom = Math.max(0.4, Math.min(1.5, zoom + delta)); document.getElementById('zoom-target').style.transform = `scale(${zoom})`; }
+        function resetZoom() { zoom = 1.0; document.getElementById('zoom-target').style.transform = `scale(1)`; }
+
+        function exportData() {
+            let csvContent = "data:text/csv;charset=utf-8,Rank,Predictor,Score,WCF,ECF,Champion,Goals\n";
+            const ranked = entries.map(e => ({...e, score: calcScore(e)})).sort((a,b) => b.score - a.score);
+            ranked.forEach((e, idx) => {
+                const row = [idx + 1, e.name, e.score, e.state.winners['w-r3-m1'] || 'TBD', e.state.winners['e-r3-m1'] || 'TBD', e.state.winners['final-matchup'] || 'TBD', e.state.totalGoals || ''].join(",");
+                csvContent += row + "\r\n";
+            });
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", "nhl_bracket_2026.csv");
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        window.onload = init;
+    </script>
+
+</body>
+</html>
